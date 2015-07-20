@@ -135,7 +135,7 @@ class Choice(models.Model):
         ordering = ['attribute_id', 'sort_order', 'value', 'pk', ]
 
 
-class BaseValue(models.Model):
+class AbstractModelAttribute(models.Model):
     attribute = models.ForeignKey(Attribute)
     value = models.CharField(_('value'), max_length=100, blank=True)
 
@@ -168,13 +168,13 @@ class BaseValue(models.Model):
         abstract = True
 
 
-def generate_value_class(model_class, class_name=None, related_name=None, meta=None):
+def create_model_attribute_class(model_class, class_name=None, related_name=None, meta=None):
     """
-    Generate a value class (derived from BaseValue) for a given model class
-    :param model_class: The model to create a BaseValue class for
-    :param class_name: The name of the BaseValue class to generate
+    Generate a value class (derived from AbstractModelAttribute) for a given model class
+    :param model_class: The model to create a AbstractModelAttribute class for
+    :param class_name: The name of the AbstractModelAttribute class to generate
     :param related_name: The related name
-    :return: A model derives from BaseValue with an object pointing to model_class
+    :return: A model derives from AbstractModelAttribute with an object pointing to model_class
     """
 
     if model_class._meta.abstract:
@@ -188,28 +188,39 @@ def generate_value_class(model_class, class_name=None, related_name=None, meta=N
     meta['db_tablespace'] = model_class._meta.db_tablespace
     meta['managed'] = model_class._meta.managed
     meta['unique_together'] = list(meta.get('unique_together', [])) + [('attribute', 'object')]
-    meta.setdefault('db_table', '{0}_value'.format(model_class._meta.db_table))
+    meta.setdefault('db_table', '{0}_attr'.format(model_class._meta.db_table))
 
     # The name of the class to generate
     if class_name is None:
-        value_class_name = b'{name}Value'.format(name=model_class.__name__)
+        value_class_name = '{name}Attr'.format(name=model_class.__name__)
     else:
         value_class_name = class_name
 
     # The related name to set
     if related_name is None:
-        model_class_related_name = b'attrs'
+        model_class_related_name = 'attrs'
     else:
         model_class_related_name = related_name
 
     # Make a type for our class
-    value_class = type(value_class_name, (BaseValue,), dict(
-        # Set to same module as model_class
-        __module__=model_class.__module__,
-        # Add a foreign key to model_class
-        object=models.ForeignKey(model_class, related_name=model_class_related_name),
-        Meta=type(str('Meta'), (object,), meta),
-    ))
+    value_class = type(
+        str(value_class_name),
+        (AbstractModelAttribute,),
+        dict(
+            # Set to same module as model_class
+            __module__=model_class.__module__,
+            # Add a foreign key to model_class
+            object=models.ForeignKey(
+                model_class,
+                related_name=model_class_related_name
+            ),
+            # Add Meta class
+            Meta=type(
+                str('Meta'),
+                (object,),
+                meta
+            ),
+        ))
 
     return value_class
 
@@ -217,5 +228,5 @@ def generate_value_class(model_class, class_name=None, related_name=None, meta=N
 class Attrs(object):
     def contribute_to_class(self, cls, name):
         # Called from django.db.models.base.ModelBase.__new__
-        import gc
-        generate_value_class(model_class=cls, related_name=name)
+        mav_class = create_model_attribute_class(model_class=cls, related_name=name)
+        cls.ModelAttributeClass = mav_class

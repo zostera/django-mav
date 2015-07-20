@@ -4,7 +4,7 @@ from collections import OrderedDict
 from django import forms
 from django.template.defaultfilters import capfirst
 
-from .models import Attribute, Choice, BaseValue
+from .models import Attribute, Choice, AbstractModelAttribute
 
 
 FIELD_PREFIX = '__mav__'
@@ -61,7 +61,7 @@ def add_attribute_fields_to_form(form, attributes, attrs):
     Add fields for attributes to form
     form = form to modify
     attributes = attributes to add (Attribute)
-    attrs = existing attributes (BaseValue)
+    attrs = existing attributes (AbstractModelAttribute)
     """
     existing = OrderedDict()
     # Find existing attributes
