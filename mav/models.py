@@ -13,10 +13,6 @@ class Unit(models.Model):
     name = models.CharField(_('name'), max_length=100, db_index=True)
     symbol = models.CharField(_('symbol'), max_length=10)
 
-    # @models.permalink
-    # def get_absolute_url(self):
-    #     return 'unit_detail', [str(self.pk)]
-
     def __unicode__(self):
         return self.name
 
@@ -50,10 +46,16 @@ class Attribute(models.Model):
     type = models.PositiveSmallIntegerField(_('type'), choices=CHOICES_FOR_TYPE)
     unit = models.ForeignKey('Unit', verbose_name=_('unit'), null=True, blank=True)
 
+    def get_name_display(self):
+        if self.name:
+            return self.name
+        return self.slug
+
     def get_label(self):
+        label_parts = [self.get_name_display(), ]
         if self.unit:
-            return '{name} ({symbol})'.format(name=self.name, symbol=self.unit.symbol)
-        return self.name
+            label_parts.append('({symbol})'.format(symbol=self.unit.symbol))
+        return ' '.join(label_parts)
 
     def get_choices(self):
         if self.type == self.TYPE_BOOLEAN:
@@ -104,12 +106,8 @@ class Attribute(models.Model):
             type=self.get_type_display()
         ))
 
-    # @models.permalink
-    # def get_absolute_url(self):
-    #     return 'attribute_detail', [str(self.pk)]
-
     def __unicode__(self):
-        return self.name
+        return self.get_name_display()
 
 
 class Choice(models.Model):
@@ -123,10 +121,6 @@ class Choice(models.Model):
         if self.name:
             return self.name
         return self.value
-
-    # @models.permalink
-    # def get_absolute_url(self):
-    #     return 'choice_detail', [str(self.pk)]
 
     def __unicode__(self):
         return '{attribute}.{name}'.format(attribute=self.attribute.name, name=self.get_value_display())
@@ -168,31 +162,30 @@ class AbstractModelAttribute(models.Model):
         abstract = True
 
 
-def create_model_attribute_class(model_class, class_name=None, related_name=None, meta=None):
+def create_model_attribute_class(model, class_name=None, related_name=None, meta=None):
     """
     Generate a value class (derived from AbstractModelAttribute) for a given model class
-    :param model_class: The model to create a AbstractModelAttribute class for
+    :param model: The model to create a AbstractModelAttribute class for
     :param class_name: The name of the AbstractModelAttribute class to generate
     :param related_name: The related name
     :return: A model derives from AbstractModelAttribute with an object pointing to model_class
     """
 
-    if model_class._meta.abstract:
+    if model._meta.abstract:
         # This can't be done, because `object = ForeignKey(model_class)` would fail.
-        raise TypeError("Can't create attrs for abstract class {0}".format(model_class.__name__))
+        raise TypeError("Can't create mav for abstract class {0}".format(model.__name__))
 
     # Define inner Meta class
     if not meta:
         meta = {}
-    meta['app_label'] = model_class._meta.app_label
-    meta['db_tablespace'] = model_class._meta.db_tablespace
-    meta['managed'] = model_class._meta.managed
+    meta['db_tablespace'] = model._meta.db_tablespace
+    meta['managed'] = model._meta.managed
     meta['unique_together'] = list(meta.get('unique_together', [])) + [('attribute', 'object')]
-    meta.setdefault('db_table', '{0}_attr'.format(model_class._meta.db_table))
+    meta.setdefault('db_table', '{0}_attr'.format(model._meta.db_table))
 
     # The name of the class to generate
     if class_name is None:
-        value_class_name = '{name}Attr'.format(name=model_class.__name__)
+        value_class_name = '{name}Attr'.format(name=model.__name__)
     else:
         value_class_name = class_name
 
@@ -208,10 +201,10 @@ def create_model_attribute_class(model_class, class_name=None, related_name=None
         (AbstractModelAttribute,),
         dict(
             # Set to same module as model_class
-            __module__=model_class.__module__,
+            __module__=model.__module__,
             # Add a foreign key to model_class
             object=models.ForeignKey(
-                model_class,
+                model,
                 related_name=model_class_related_name
             ),
             # Add Meta class
@@ -225,8 +218,39 @@ def create_model_attribute_class(model_class, class_name=None, related_name=None
     return value_class
 
 
-class Attrs(object):
-    def contribute_to_class(self, cls, name):
-        # Called from django.db.models.base.ModelBase.__new__
-        mav_class = create_model_attribute_class(model_class=cls, related_name=name)
-        cls.ModelAttributeClass = mav_class
+def get_mav_attribute(self, attribute):
+    try:
+        attr = self.mav.model.objects.get(
+            attribute=attribute,
+            object=self,
+        )
+    except self.mav.model.DoesNotExist:
+        attr = None
+    return attr
+
+
+def set_mav_attribute(self, attribute, value):
+    attr, created = self.mav.model.objects.get_or_create(
+        attribute=attribute,
+        object=self,
+    )
+    if attr.value != value:
+        attr.value = value
+        attr.save()
+    return attr
+
+
+def delete_mav_attribute(self, attribute):
+    attr = get_mav_attribute(self.attribute)
+    if attr:
+        attr.delete()
+
+
+class Mav(object):
+    model = None
+
+
+def add_mav_to(model, name=None):
+    from mav import attrs
+    mav_class = create_model_attribute_class(model=model, related_name=name)
+    setattr(attrs, mav_class.__name__, mav_class)

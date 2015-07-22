@@ -1,17 +1,22 @@
- # coding: utf-8
+# coding: utf-8
 from __future__ import unicode_literals
 
 import datetime
+from django.db import models
 
 from django.test import TestCase
 
 from model_mommy import mommy
+from mav.decorators import mav
 
 from .models import Attribute
 
+@mav
+class Foo(models.Model):
+    name = models.CharField(max_length=100)
+
 
 class ValueTestCase(TestCase):
-
     def test_unit_symbol(self):
         """
         Test display of strange symbols in units
@@ -84,3 +89,17 @@ class ValueTestCase(TestCase):
             self.assertEqual(time, attribute.text_to_value(text))
         with self.assertRaises(ValueError):
             attribute.text_to_value('this.is.not.a.time')
+
+    def test_class_with_attrs(self):
+        """
+        Test to see if class with attrs behaves
+        """
+        bar = Attribute(type=Attribute.TYPE_TEXT, slug='bar')
+        bar.save()
+        foo = Foo(name='foo')
+        foo.save()
+        self.assertEqual(bar.slug, 'bar')
+        attr = Foo.AttrClass(attribute=bar, object=foo, value='foobar')
+        attr.save()
+        print foo.attrs.all()
+

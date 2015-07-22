@@ -28,6 +28,11 @@ if sys.argv[-1] == 'publish':
     print("  git push --tags")
     sys.exit()
 
+if sys.argv[-1] == 'test':
+    os.system('pip install -U -r requirements.txt')
+    os.system('python manage.py test')
+    sys.exit()
+
 setup(
     name='django-mav',
     version=version,
