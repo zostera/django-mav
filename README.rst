@@ -24,24 +24,24 @@ Installation
 Example code (foo/models.py)
 ----------------------------
 
-    .. code:: Django
+.. code:: Django
 
     from django.db import models
-
+    
     from mav.decorators import mav
-
+    
     @mav
     class Foo(models.Model):
-         name = models.CharField(max_length=100)
-
+        name = models.CharField(max_length=100)
+    
     # The @mav decorator will generate a FooAttr class in mav.attrs:
-
+    
     class FooAttr(AbstractModelAttribute):
-         # Inherited from AbstractModelAttribute
-         attribute = models.ForeignKey(Attribute)
-         value = models.TextField(...)
-         # Generated
-         object = models.ForeignKey(Foo, related_name='attrs')
+        # Inherited from AbstractModelAttribute
+        attribute = models.ForeignKey(Attribute)
+        value = models.TextField(...)
+        # Generated
+        object = models.ForeignKey(Foo, related_name='attrs')
 
 
 Documentation
