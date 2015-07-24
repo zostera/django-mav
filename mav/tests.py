@@ -99,7 +99,11 @@ class ValueTestCase(TestCase):
         foo = Foo(name='foo')
         foo.save()
         self.assertEqual(bar.slug, 'bar')
-        attr = Foo.AttrClass(attribute=bar, object=foo, value='foobar')
+        mav_class = Foo._mav_class
+        from mav.attrs import FooAttr
+        self.assertEqual(FooAttr, mav_class)
+        attr = mav_class(attribute=bar, object=foo, value='foobar')
         attr.save()
-        print foo.attrs.all()
-
+        self.assertEqual(attr.value, 'foobar')
+        self.assertEqual(attr.object, foo)
+        self.assertEqual(attr.attribute, bar)

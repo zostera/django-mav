@@ -5,6 +5,8 @@ import datetime
 from django.contrib.gis.db import models
 from django.utils.translation import ugettext_lazy as _
 
+from . import attrs
+
 
 class Unit(models.Model):
     """
@@ -178,9 +180,17 @@ def create_model_attribute_class(model, class_name=None, related_name=None, meta
     # Define inner Meta class
     if not meta:
         meta = {}
-    meta['db_tablespace'] = model._meta.db_tablespace
-    meta['managed'] = model._meta.managed
+
+    # Force only one value for each model, attribute set
     meta['unique_together'] = list(meta.get('unique_together', [])) + [('attribute', 'object')]
+
+    # Use the same tablespace as the model
+    meta['db_tablespace'] = model._meta.db_tablespace
+
+    # Use same setting for managed as model
+    meta['managed'] = model._meta.managed
+
+    # Set the default db table
     meta.setdefault('db_table', '{0}_attr'.format(model._meta.db_table))
 
     # The name of the class to generate
@@ -218,39 +228,28 @@ def create_model_attribute_class(model, class_name=None, related_name=None, meta
     return value_class
 
 
-def get_mav_attribute(self, attribute):
-    try:
-        attr = self.mav.model.objects.get(
-            attribute=attribute,
-            object=self,
-        )
-    except self.mav.model.DoesNotExist:
-        attr = None
-    return attr
+def add_mav_to(model, class_name=None, related_name=None, meta=None):
+    """
+    Patch model class to have mav attributes
+    :param model: The model class to patch
+    :param class_name: The name of the class to generate
+    :param related_name: The related_name to set in the model
+    :return: The generated class
+    """
 
-
-def set_mav_attribute(self, attribute, value):
-    attr, created = self.mav.model.objects.get_or_create(
-        attribute=attribute,
-        object=self,
+    # Generate the class
+    mav_class = create_model_attribute_class(
+        model=model,
+        class_name=class_name,
+        related_name=related_name,
+        meta=meta,
     )
-    if attr.value != value:
-        attr.value = value
-        attr.save()
-    return attr
 
-
-def delete_mav_attribute(self, attribute):
-    attr = get_mav_attribute(self.attribute)
-    if attr:
-        attr.delete()
-
-
-class Mav(object):
-    model = None
-
-
-def add_mav_to(model, name=None):
-    from mav import attrs
-    mav_class = create_model_attribute_class(model=model, related_name=name)
+    # Add it to .attrs
     setattr(attrs, mav_class.__name__, mav_class)
+
+    # Link it to the model
+    model._mav_class = mav_class
+
+    # Return the generated class
+    return mav_class
