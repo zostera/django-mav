@@ -1,5 +1,6 @@
 include LICENSE
 include README.rst
+include HISTORY.rst
 recursive-include mav/static *
 recursive-include mav/templates *
 recursive-include docs *
