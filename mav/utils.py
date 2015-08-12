@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from django.utils.text import slugify
 
 
@@ -8,3 +10,5 @@ def slugify_with_underscores(text):
     :return: The slugified text
     """
     return slugify(text).replace('-', '_')
+
+

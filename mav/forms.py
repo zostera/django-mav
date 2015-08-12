@@ -26,20 +26,21 @@ def generate_attribute_field(attribute, value=''):
     """
     Generate a attribute field
     """
+
+    # If we get choices, make a select
     choices = attribute.get_choices()
     if choices:
-        required = True
-        for choice in choices:
-            if choice[0] == '':
-                required = False
-        field = forms.ChoiceField(choices=choices, required=required, initial=value)
+        field = forms.ChoiceField(choices=choices, required=False, initial=value)
     elif attribute.type == Attribute.TYPE_INTEGER:
         field = forms.IntegerField(required=False, initial=value)
     elif attribute.type == Attribute.TYPE_DECIMAL:
         field = RelaxedFloatField(required=False, initial=value)
     elif attribute.type == Attribute.TYPE_DATE:
         field = forms.DateField(required=False, initial=value)
-        field.widget.attrs['data-datepicker'] = True
+        field.widget.attrs['data-datefield'] = True
+    elif attribute.type == Attribute.TYPE_TIME:
+        field = forms.TimeField(required=False, initial=value)
+        field.widget.attrs['data-timefield'] = True
     else:
         field = forms.CharField(required=False, initial=value)
     field.label = capfirst(attribute.get_label())

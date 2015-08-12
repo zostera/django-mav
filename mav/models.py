@@ -60,49 +60,74 @@ class Attribute(models.Model):
         return ' '.join(label_parts)
 
     def get_choices(self):
+        """
+        Get choices for this attribute
+        """
+
+        # Standard choices for a boolean
         if self.type == self.TYPE_BOOLEAN:
             return (
                 ('', _('unknown')),
                 ('TRUE', _('yes')),
                 ('FALSE', _('no')),
             )
+
         return [(choice.pk, choice.get_value_display()) for choice in self.choice_set.order_by('sort_order', 'name')]
 
+    def text_to_int(self, text):
+        return int(text)
+
+    def text_to_float(self, text):
+        return float(text)
+
+    def text_to_boolean(self, text):
+        if text in self.BOOLEAN_TRUE_TEXTS:
+            return True
+        if text in self.BOOLEAN_FALSE_TEXTS:
+            return False
+        if text in self.BOOLEAN_NULL_TEXTS:
+            return None
+        raise ValueError(_('Value "{value}" is not a valid boolean.').format(value=text))
+
+    def text_to_date(self, text):
+        parts = text.split('-')
+        return datetime.date(
+            int(parts[0].strip()),
+            int(parts[1].strip()),
+            int(parts[2].strip()),
+        )
+
+    def text_to_time(self, text):
+        parts = text.split(':')
+        hours = int(parts[0].strip())
+        try:
+            minutes = int(parts[1].strip())
+        except IndexError:
+            minutes = 0
+        try:
+            seconds = int(parts[2].strip())
+        except IndexError:
+            seconds = 0
+        return datetime.time(hours, minutes, seconds)
+
     def text_to_value(self, text):
+        # Any text is valid text
         if self.type == self.TYPE_TEXT:
             return text
+        # Copy, convert to uppercase and strip spaces
         t = text.upper().strip()
+        # Try all other valid types
         if self.type == self.TYPE_INTEGER:
-            return int(t)
+            return self.text_to_int(t)
         if self.type == self.TYPE_DECIMAL:
-            return float(t)
+            return self.text_to_float(t)
         if self.type == self.TYPE_BOOLEAN:
-            if t in self.BOOLEAN_TRUE_TEXTS:
-                return True
-            if t in self.BOOLEAN_FALSE_TEXTS:
-                return False
-            if t in self.BOOLEAN_NULL_TEXTS:
-                return None
+            return self.text_to_boolean(t)
         if self.type == self.TYPE_DATE:
-            parts = text.split('-')
-            return datetime.date(
-                int(parts[0].strip()),
-                int(parts[1].strip()),
-                int(parts[2].strip()),
-            )
+            return self.text_to_date(t)
         if self.type == self.TYPE_TIME:
-            parts = text.split(':')
-            hours = int(parts[0].strip())
-            try:
-                minutes = int(parts[1].strip())
-            except IndexError:
-                minutes = 0
-            try:
-                seconds = int(parts[2].strip())
-            except IndexError:
-                seconds = 0
-            return datetime.time(hours, minutes, seconds)
-        # We cannot parse this
+            return self.text_to_time(t)
+        # We cannot parse this type, use original variable ``text`` for error
         raise ValueError('Cannot convert text "{text}" to value of type {type}.'.format(
             text=text,
             type=self.get_type_display()
@@ -113,6 +138,9 @@ class Attribute(models.Model):
 
 
 class Choice(models.Model):
+    """
+    A choice for the value of an attribute
+    """
     attribute = models.ForeignKey(Attribute)
     value = models.CharField(_('value'), max_length=100, blank=True)
     name = models.CharField(_('name'), max_length=100, blank=True)
@@ -132,6 +160,9 @@ class Choice(models.Model):
 
 
 class AbstractModelAttribute(models.Model):
+    """
+    Abstract model to store attribute/value for a model
+    """
     attribute = models.ForeignKey(Attribute)
     value = models.CharField(_('value'), max_length=100, blank=True)
 
