@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 import datetime
 
 from django.contrib.gis.db import models
+from django.core.exceptions import MultipleObjectsReturned
 from django.utils.translation import ugettext_lazy as _
 
 from . import attrs
@@ -54,10 +55,28 @@ class Attribute(models.Model):
         return self.slug
 
     def get_label(self):
-        label_parts = [self.get_name_display(), ]
+        label = self.get_name_display()
         if self.unit:
-            label_parts.append('({symbol})'.format(symbol=self.unit.symbol))
-        return ' '.join(label_parts)
+            label = '{label} ({symbol})'.format(
+                label=label,
+                symbol=self.unit.symbol,
+            )
+        return label
+
+    def get_value_display(self, value):
+        # If there are choices, try to get the choice representation
+        if self.choice_set.exists():
+            try:
+                choice = Choice.objects.get(pk=value)
+            except Choice.DoesNotExist:
+                pass
+            except MultipleObjectsReturned:
+                pass
+            else:
+                return choice.get_value_display()
+        # No choices or choices failed, just convert the value to string
+        return '{}'.format(value)
+
 
     def get_choices(self):
         """
@@ -75,12 +94,21 @@ class Attribute(models.Model):
         return [(choice.pk, choice.get_value_display()) for choice in self.choice_set.order_by('sort_order', 'name')]
 
     def text_to_int(self, text):
+        """
+        Convert text to integer
+        """
         return int(text)
 
     def text_to_float(self, text):
+        """
+        Convert text to float
+        """
         return float(text)
 
     def text_to_boolean(self, text):
+        """
+        Convert text to boolean
+        """
         if text in self.BOOLEAN_TRUE_TEXTS:
             return True
         if text in self.BOOLEAN_FALSE_TEXTS:
@@ -90,6 +118,9 @@ class Attribute(models.Model):
         raise ValueError(_('Value "{value}" is not a valid boolean.').format(value=text))
 
     def text_to_date(self, text):
+        """
+        Convert text to date
+        """
         parts = text.split('-')
         return datetime.date(
             int(parts[0].strip()),
@@ -98,6 +129,9 @@ class Attribute(models.Model):
         )
 
     def text_to_time(self, text):
+        """
+        Convert text to time
+        """
         parts = text.split(':')
         hours = int(parts[0].strip())
         try:
@@ -111,6 +145,9 @@ class Attribute(models.Model):
         return datetime.time(hours, minutes, seconds)
 
     def text_to_value(self, text):
+        """
+        Convert text to Python value
+        """
         # Any text is valid text
         if self.type == self.TYPE_TEXT:
             return text
@@ -166,24 +203,17 @@ class AbstractModelAttribute(models.Model):
     attribute = models.ForeignKey(Attribute)
     value = models.CharField(_('value'), max_length=100, blank=True)
 
+    def get_value(self):
+        """
+        Return the a Python variable of the appropriate type for the current value
+        """
+        return self.attribute.text_to_value(self.value)
+
     def get_value_display(self):
-        value = '{}'.format(self.value)
-        if self.attribute.choice_set.exists():
-            choice_values = []
-            for choice in value.split(','):
-                try:
-                    choice_id = int(choice)
-                except ValueError:
-                    choice_values.append('!!!error!!!')
-                else:
-                    try:
-                        choice = Choice.objects.get(pk=choice_id)
-                    except Choice.DoesNotExist:
-                        choice_values.append('!!!not_found!!!')
-                    else:
-                        choice_values.append(choice.get_value_display())
-            value = ', '.join(choice_values)
-        return value
+        """
+        Return a unicode representation of the current value
+        """
+        return self.attribute.get_value_display(self.get_value())
 
     def __unicode__(self):
         return '{attribute} = {value}'.format(
